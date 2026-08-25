@@ -6,8 +6,21 @@ import { DEMO, DEMO_SEEDED } from '../lib/demo.js'
 import { MOBILE, nativeLoad, nativeSave, syncReminder } from '../lib/mobile.js'
 
 const KEY = 'gym_state_v1'
+
+// Domyślny język: ten z przeglądarki, jeśli mamy dla niego pakiet tłumaczeń,
+// w przeciwnym razie polski (ta instancja jest przeznaczona dla polskich użytkowników).
+const SUPPORTED = ['en','de','es','fr','it','pt','pl','tr','ru','zh','ko','hi']
+function defaultLang() {
+  try {
+    for (const l of (navigator.languages || [navigator.language || ''])) {
+      const code = String(l).slice(0, 2).toLowerCase()
+      if (SUPPORTED.includes(code)) return code
+    }
+  } catch (e) { /* brak navigatora (SSR, testy) */ }
+  return 'pl'
+}
 export const DEF = {
-  unit: 'kg', restSec: 90, sound: true, keepAwake: true, lang: 'en',
+  unit: 'kg', restSec: 90, sound: true, keepAwake: true, lang: defaultLang(),
   theme: 'dark', accent: 'lime', body: 'male', targetW: null,
   bodyweight: [], routines: [], week: {}, dayPlan: {},
   exWeights: {}, workouts: [], active: null, customEx: [], gifSize: 'full',

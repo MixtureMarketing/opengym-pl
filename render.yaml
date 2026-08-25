@@ -1,6 +1,29 @@
+# Blueprint dla Render.com — jedna usługa, jeden kontener (API + frontend razem).
+# Po wdrożeniu ustaw RP_ID i ORIGIN na adres nadany przez Render, inaczej
+# logowanie kluczem dostępu nie zadziała.
 services:
   - type: web
     name: opengym
     env: docker
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./Dockerfile.allinone
     dockerContext: .
+    healthCheckPath: /
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: DATA_DIR
+        value: /data
+      - key: RP_ID
+        sync: false          # np. opengym-xxxx.onrender.com (sama nazwa hosta)
+      - key: ORIGIN
+        sync: false          # np. https://opengym-xxxx.onrender.com
+      - key: RP_NAME
+        value: openGym
+      - key: ADMIN_UIDS
+        sync: false
+      - key: INVITE_ONLY
+        value: "1"           # bez tego każdy z linkiem założy sobie profil
+    disk:
+      name: opengym-data     # profile, klucze publiczne, dane treningowe — to backupujesz
+      mountPath: /data
+      sizeGB: 1

@@ -1,7 +1,8 @@
 {
   "name": "openGym",
   "short_name": "openGym",
-  "description": "Personal gym & body weight tracker",
+  "description": "Osobisty dziennik treningów siłowych i masy ciała",
+  "lang": "pl",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

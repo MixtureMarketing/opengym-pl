@@ -1,0 +1,21 @@
+# Zależności i wyniki budowania
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Konfiguracja lokalna — zawiera dane twojej instancji, NIE commituj
+.env
+.env.local
+
+# Dane użytkowników: profile, klucze publiczne, treningi, sekret sesji.
+# To backupujesz, ale do repozytorium nie trafia nigdy.
+data/
+!data/.gitkeep
+
+# Grafiki ćwiczeń pobierane jednorazowo (~140 MB)
+media/img/
+media/gif/
+
+# Śmieci systemowe
+.DS_Store
+*.log

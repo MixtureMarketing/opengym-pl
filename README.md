@@ -1,3 +1,5 @@
+> **Polska wersja tego forka:** [README.pl.md](README.pl.md) · wdrożenie: [docs/WDROZENIE.md](docs/WDROZENIE.md)
+
 <div align="center">
 
 <img src="assets/banner.png" alt="openGym" width="720">

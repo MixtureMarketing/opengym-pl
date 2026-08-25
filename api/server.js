@@ -25,6 +25,10 @@ const INVITE_ONLY = /^(1|true|yes|on)$/i.test(process.env.INVITE_ONLY || '');
 // baked into each cookie when it's issued, so lowering this never cuts an existing session short.
 const SESSION_DAYS = Math.max(1, +(process.env.SESSION_DAYS || 90) || 90);
 const MAX_BODY = 5 * 1024 * 1024;
+// Optional single-container mode: when STATIC_DIR points at a built frontend, this process
+// also serves the app itself. Keeps API and UI on one origin (a WebAuthn requirement) without
+// nginx in front, which is what platforms like Render/Railway/Fly expose — one port, one image.
+const STATIC_DIR = process.env.STATIC_DIR || '';
 // Secure cookies require HTTPS; over plain http://localhost the flag would drop the cookie
 const SECURE = /^https:/i.test(ORIGIN) ? ' Secure;' : '';
 
@@ -541,11 +545,52 @@ const routes = {
   }
 };
 
+/* ---------- static frontend (single-container mode) ---------- */
+const MIME = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png',
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.ico': 'image/x-icon',
+  '.webp': 'image/webp', '.avif': 'image/avif', '.woff': 'font/woff', '.woff2': 'font/woff2',
+  '.txt': 'text/plain; charset=utf-8', '.map': 'application/json; charset=utf-8'
+};
+// Hashed build assets are immutable; the shell and anything that can change must revalidate,
+// or a deploy leaves phones on the old bundle until they clear the cache.
+const cacheFor = p => /\.(png|jpg|jpeg|gif|ico|svg|webp|avif|woff2?)$/i.test(p)
+  ? 'public, max-age=2592000, immutable'
+  : 'no-cache, must-revalidate';
+
+function serveStatic(req, res, pathname) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return json(res, 404, { error: 'not found' });
+  // decodeURIComponent + normalize + a root check: nothing outside STATIC_DIR is reachable.
+  let rel;
+  try { rel = decodeURIComponent(pathname); } catch { return json(res, 400, { error: 'bad path' }); }
+  let file = path.normalize(path.join(STATIC_DIR, rel));
+  if (!file.startsWith(path.normalize(STATIC_DIR + path.sep)) && file !== path.normalize(STATIC_DIR)) {
+    return json(res, 403, { error: 'forbidden' });
+  }
+  try { if (fs.statSync(file).isDirectory()) file = path.join(file, 'index.html'); }
+  catch { file = path.join(STATIC_DIR, 'index.html'); }        // SPA fallback
+  if (!fs.existsSync(file)) file = path.join(STATIC_DIR, 'index.html');
+  if (!fs.existsSync(file)) return json(res, 404, { error: 'not found' });
+
+  const body = fs.readFileSync(file);
+  res.writeHead(200, {
+    'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
+    'Content-Length': body.length,
+    'Cache-Control': cacheFor(file)
+  });
+  res.end(req.method === 'HEAD' ? undefined : body);
+}
+
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const key = req.method + ' ' + url.pathname;
   const handler = routes[key];
-  if (!handler) return json(res, 404, { error: 'not found' });
+  if (!handler) {
+    if (STATIC_DIR && !url.pathname.startsWith('/api/')) return serveStatic(req, res, url.pathname);
+    return json(res, 404, { error: 'not found' });
+  }
   try { await handler(req, res); }
   catch (e) {
     console.error(key, e);
