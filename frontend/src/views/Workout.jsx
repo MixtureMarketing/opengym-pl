@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
@@ -13,6 +13,8 @@ import { startFlow, exercisePicker, exConfigSheet, exerciseDetailSheet, topWeigh
 import Icon from '../components/Icon.jsx'
 import { Button, Check, NumberField } from '../components/ui.jsx'
 import { nextPrescription, applyPrescription } from '../lib/progression.js'
+import { checkJump } from '../lib/coach.js'
+import { ICON as COACH_ICON } from '../components/CoachCard.jsx'
 import { glyphOf } from '../lib/glyphs.js'
 
 /* ---------- start chooser (no active workout) ---------- */
@@ -91,6 +93,15 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
   const kind = effortOf(S)
   const eff = EFFORT[kind]
   const col3 = mode === 'reps' && eff ? { ...eff, eff: kind, dec: true, opt: true, hd: t(eff.hd) } : null
+  // Najcięższa z serii jeszcze nieodhaczonych: to ona zaraz pójdzie na sztangę, więc to ją
+  // trener ocenia. Sesje bez ciężaru (masa własna, cardio) nie mają czego porównywać.
+  const alert = useMemo(() => {
+    if (cardio || (bw && !added)) return null
+    const pending = entry.sets.filter(s => !s.done && s.w > 0)
+    if (!pending.length) return null
+    const top = pending.reduce((a, s) => (s.w > a.w ? s : a), pending[0])
+    return checkJump(S, cfg, top.w, top.r)
+  }, [S.workouts, entry.sets, entry.id])
   // The effort column walks its own scale — see stepEffort. Weight and reps step up from 0
   // with no ceiling, as they always did.
   const bump = (s, i, col, dir) => {
@@ -127,6 +138,12 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
     {plan && plan.why && plan.kind !== 'off' && <div className={'progline' + (plan.kind === 'deload' ? ' warn' : '')}>
       <Icon name={plan.kind === 'up' ? 'arrowUp' : plan.kind === 'deload' ? 'arrowDown' : 'lightbulb'} />
       <span>{t(...plan.why)}</span>
+    </div>}
+    {/* Trener patrzy na to, co realnie stoi w niezrobionych seriach — także po ręcznej
+        zmianie ciężaru, której żadna polityka progresji nie zaplanowała. */}
+    {alert && <div className={'progline ' + (alert.level === 'stop' ? 'stop' : 'warn')}>
+      <Icon name={COACH_ICON[alert.level]} />
+      <span><b>{t(alert.title)}</b> — {t(alert.detail, ...alert.args)}</span>
     </div>}
     <div className="card" style={{ marginTop: 10, marginBottom: 0 }}>
       {/* the header carries the same eff3 sizing as the rows, or the labels drift off their columns */}

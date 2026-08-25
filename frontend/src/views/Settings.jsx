@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore, DEF, hasData } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
-import { ACCENTS, todayISO, localTZ } from '../lib/format.js'
+import { ACCENTS, todayISO, localTZ, fmtDate } from '../lib/format.js'
 import { effortOf } from '../lib/history.js'
 import { api, webauthnOK, passkeyLogin, passkeyRegister, IS_ANDROID } from '../lib/api.js'
 import { pushSupported, enablePush, disablePush, sendTestPush } from '../lib/push.js'
@@ -35,6 +35,9 @@ export default function Settings() {
     const blob = new Blob([json], { type: 'application/json' })
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href)
     toast(t('Backup exported'))
+    // Ręczny eksport zeruje licznik automatu: kopia to kopia, niezależnie od tego,
+    // kto ją zlecił.
+    update(s => { s.backup = { ...(s.backup || {}), last: Date.now(), lastFailed: false } }, false)
   }
   const doImport = ev => {
     const f = ev.target.files[0]; if (!f) return
@@ -180,6 +183,14 @@ export default function Settings() {
         accessory="chevron" onClick={() => importRef.current.click()} />
       <Row icon="upload" iconTint="var(--blue)" title={t('Import backup')} accessory="chevron" onClick={() => fileRef.current.click()} />
       <Row icon="download" iconTint="var(--blue)" title={t('Export backup (JSON)')} accessory="chevron" onClick={doExport} />
+      {/* Automat i tak nie zastąpi ręcznego eksportu — pokazujemy datę, żeby dało się
+          sprawdzić, czy pobieranie w tej przeglądarce faktycznie przechodzi. */}
+      <Row icon="clock" iconTint="var(--teal)" title={t('Weekly automatic backup')}
+        subtitle={S.backup?.last
+          ? t('Last saved {0}', fmtDate(new Date(S.backup.last).toISOString().slice(0, 10), true))
+          : t('A copy of everything, saved once a week.')}>
+        <Switch checked={S.backup?.auto !== false} onChange={v => update(s => { s.backup = { ...(s.backup || {}), auto: v } })} />
+      </Row>
       <Row icon="trash" iconTint="var(--red)" title={t('Reset everything')} danger onClick={() => confirmSheet({ title: t('Reset everything?'), message: t('Deletes your plan, workouts and body weight on this device. This cannot be undone.'), confirmText: t('Delete everything'), danger: true, onConfirm: () => { replaceState(JSON.parse(JSON.stringify(DEF)), true); nav('/home'); toast(t('All data reset')) } })} />
     </Section>
     <input ref={fileRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={doImport} />

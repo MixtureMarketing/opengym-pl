@@ -28,7 +28,11 @@ export const DEF = {
   // that a profile which never chose (loaded state is overlaid on DEF, on every path: local,
   // server pull, backup import) still falls back to the `showRir` boolean this replaced and
   // keeps the column it had. See effortOf.
-  reminder: { on: false, time: '08:00', tz: null }, effort: null
+  reminder: { on: false, time: '08:00', tz: null }, effort: null,
+  // Automatyczna kopia zapasowa raz w tygodniu (lib/backup.js). `started` to moment, od
+  // którego liczy się pierwszy tydzień — ustawiany przy pierwszym zapisanym treningu,
+  // żeby świeży profil nie dostał pliku w Pobranych zaraz po instalacji.
+  backup: { auto: true, last: null, started: null, lastFailed: false }
 }
 const clone = o => JSON.parse(JSON.stringify(o))
 
@@ -95,6 +99,7 @@ export const useStore = create((set, get) => {
   return {
     S: (() => { const s = loadState(); registerCustom(s.customEx); return s })(),
     user: (() => { try { return JSON.parse(localStorage.getItem('gym_user')) || null } catch { return null } })(),
+    aiCoach: false,          // czy serwer ma skonfigurowanego trenera AI (patrz boot)
     ready: false,
 
     // Mutate a draft of S via producer fn, then persist + schedule sync.
@@ -188,6 +193,9 @@ export const useStore = create((set, get) => {
       try {
         const me = await api('/api/me')
         get().setUser(me.user)
+        // Trener AI istnieje tylko wtedy, gdy serwer ma klucz — front nie zgaduje,
+        // tylko pyta, żeby nie pokazywać przycisku, który zawsze zwróci błąd.
+        set({ aiCoach: !!me.coach })
         await get().pullState()
         // Re-stamp the reminder's timezone on every load — keeps it correct if you're travelling,
         // without needing to revisit Settings.

@@ -8,6 +8,9 @@ import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadSta
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
+import CoachCard from '../components/CoachCard.jsx'
+import { backupNagging, exportNow } from '../lib/backup.js'
+import { useUI } from '../store/useUI.js'
 import { glyphOf } from '../lib/glyphs.js'
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
@@ -16,6 +19,13 @@ export default function Home() {
   const S = useStore(s => s.S)
   const user = useStore(s => s.user)
   const [weekOffset, setWeekOffset] = useState(0)
+  const update = useStore(s => s.update)
+  const toast = useUI(s => s.toast)
+  const saveBackup = async () => {
+    const res = await exportNow(S)
+    update(s => { s.backup = { ...(s.backup || {}), last: Date.now(), lastFailed: res === 'failed' } }, false)
+    toast(res === 'failed' ? t('Could not save the file') : t('Backup exported'))
+  }
 
   const today = new Date()
   const routine = effectiveRoutine(S, todayISO())
@@ -73,6 +83,24 @@ export default function Home() {
           : <Icon name="plus" className="chev" />}
       </div>
     </div>
+
+    {/* Automatyczne pobieranie bywa blokowane (PWA na iOS, ustawienia przeglądarki).
+        Wtedy jedyną uczciwą reakcją jest poprosić o kliknięcie, a nie udawać, że kopia jest. */}
+    {backupNagging(S) && (
+      <div className="card" style={{ borderColor: 'var(--yellow)' }}>
+        <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
+          <Icon name="upload" style={{ color: 'var(--yellow)', fontSize: 18, marginTop: 2 }} />
+          <div style={{ minWidth: 0 }}>
+            <div className="small" style={{ fontWeight: 600 }}>{t('No backup for two weeks')}</div>
+            <div className="dim" style={{ fontSize: '.78rem', lineHeight: 1.45 }}>{t('Your training log lives only in this browser. Save a copy — it takes one tap.')}</div>
+          </div>
+        </div>
+        <div style={{ height: 10 }} />
+        <Button variant="primary" icon="download" onClick={saveBackup}>{t('Save a backup now')}</Button>
+      </div>
+    )}
+
+    <CoachCard />
 
     {!S.routines.length && !S.active && (
       <div className="card">

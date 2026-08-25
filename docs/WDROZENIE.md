@@ -178,6 +178,76 @@ czego ta licencja oczekuje.
 
 ---
 
+## Trener
+
+Aplikacja ma dwie warstwy podpowiedzi. Pierwsza działa zawsze, druga wymaga serwera i klucza API.
+
+### Warstwa lokalna — zawsze, za darmo, offline
+
+Liczona w przeglądarce z twojej własnej historii, bez żadnego API. Sprawdza:
+
+- **skok ciężaru** — porównuje to, co masz wpisane w niezrobionych seriach, z ostatnią sesją
+  tego ćwiczenia; ostrzega dopiero, gdy skok przekracza jednocześnie próg procentowy
+  i krotność standardowego przyrostu, więc normalna progresja jest cicha,
+- **ciężar ponad rekord** — przelicza ciężar × powtórzenia na szacowany 1RM i mówi,
+  gdy wynik wymagałby pobicia twojego rekordu życiowego,
+- **skok objętości** — tonaż tygodnia względem średniej z poprzednich tygodni,
+- **trening stale na upadku** — średni zapas powtórzeń (RIR) poniżej jednego przez trzy tygodnie,
+- **brak dnia wolnego** — siedem dni treningowych z rzędu,
+- **zastój** — cztery sesje bez poprawy szacowanego 1RM, z propozycją zejścia o 10 %,
+- **pominięte partie** — duża grupa mięśniowa bez ani jednej serii przez cztery tygodnie,
+- **brak pomiarów masy ciała**.
+
+Ostrzeżenie o ciężarze pojawia się w trakcie treningu, nad tabelą serii. Reszta trafia
+na kartę „Trener" na ekranie głównym — karta znika, gdy nie ma nic do powiedzenia.
+
+### Warstwa AI — opcjonalna, wymaga serwera
+
+Przycisk „Zapytaj trenera" i swobodne pytania po polsku. Klucz API nie może leżeć we froncie
+(każdy odwiedzający odczytałby go z kodu strony i wygenerował rachunek na twoje konto),
+więc ta warstwa istnieje wyłącznie w wariancie B i C.
+
+W `.env`:
+
+```ini
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-opus-5
+COACH_DAILY_LIMIT=40
+```
+
+Klucz wygenerujesz w [console.anthropic.com](https://console.anthropic.com). Po zmianie
+`.env` zrestartuj kontener: `docker compose restart api`.
+
+Do modelu idzie **podsumowanie**, nie dziennik: tonaż tygodniami, osiem najczęstszych ćwiczeń
+z ostatnimi seriami i szacowanym 1RM, ostatnie pomiary masy ciała oraz ustalenia warstwy
+lokalnej. Około 1,7 kB na pytanie, czyli grosze. `COACH_DAILY_LIMIT` to twarda blokada
+liczby pytań na użytkownika na dobę — zabezpieczenie rachunku przed pętlą w kliencie.
+
+Bez klucza `/api/coach` odpowiada 501, a aplikacja po prostu nie pokazuje przycisku.
+
+---
+
+## Kopia zapasowa danych treningowych
+
+Raz w tygodniu aplikacja sama zapisuje plik JSON z całym stanem — plan, treningi, masę ciała,
+ustawienia. Uruchamia się przy otwarciu aplikacji (przeglądarka nie pozwoli zapisać pliku
+przy zamkniętej karcie), więc w praktyce zdarza się to przy pierwszym wejściu po upływie tygodnia.
+
+- **przeglądarka** — plik ląduje w Pobranych, tak samo jak po kliknięciu eksportu,
+- **aplikacja natywna** — plik ląduje w katalogu dokumentów, bez pytania,
+- **gdy pobieranie jest zablokowane** (zdarza się w PWA na iOS i przy zaostrzonych ustawieniach
+  przeglądarki) — po dwóch tygodniach bez kopii ekran główny pokazuje pasek z przyciskiem
+  „Zapisz kopię teraz". Aplikacja nie udaje, że kopia jest, skoro jej nie ma.
+
+Data ostatniej kopii i przełącznik automatu siedzą w *Ustawienia → Dane*. Ręczny eksport
+zeruje licznik — kopia to kopia, niezależnie od tego, kto ją zlecił.
+
+W wariancie B i C dochodzi drugi, niezależny mechanizm: dane są na serwerze w `data/`,
+więc utrata telefonu nic nie kosztuje. Plik JSON pozostaje wtedy zabezpieczeniem na wypadek
+utraty samego serwera.
+
+---
+
 ## Typowe problemy
 
 **„Logowanie kluczem nie działa"** — sprawdź, czy `ORIGIN` w `.env` co do znaku odpowiada

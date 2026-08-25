@@ -588,6 +588,8 @@ h4.sec{
   font-size:13px;line-height:1.38;color:var(--acc);
 }
 .progline.warn{color:var(--yellow)}
+.progline.stop{color:var(--red)}
+.progline b{font-weight:600}
 .progline svg{flex:none;margin-top:2px}
 
 /* start a timed set (issue #16) — sits where you'd otherwise reach for the checkbox */

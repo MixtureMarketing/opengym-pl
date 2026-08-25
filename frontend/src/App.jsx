@@ -4,9 +4,10 @@ import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { bindUI } from './components/ui.jsx'
 import { ACCENTS } from './lib/format.js'
-import { setLang, useLang } from './lib/i18n.js'
+import { setLang, useLang, t } from './lib/i18n.js'
 import { setNav } from './lib/nav.js'
 import { useWakeLock } from './lib/wakelock.js'
+import { backupDue, writeBackup, hasSomethingToSave } from './lib/backup.js'
 import { startFlow } from './sheets.jsx'
 import Icon from './components/Icon.jsx'
 import TabBar from './components/TabBar.jsx'
@@ -35,6 +36,34 @@ function applyPrefs(theme, accent) {
   if (meta) meta.content = de.dataset.theme === 'light' ? '#f2f2f7' : '#000000'
 }
 
+// Automatyczna kopia raz w tygodniu. Odpala się przy starcie aplikacji, nie w tle: żadna
+// przeglądarka nie pozwoli zapisać pliku bez otwartej karty, a moment otwarcia to i tak
+// najczęstszy moment, w którym dane są świeże po treningu.
+function useAutoBackup(S, active) {
+  const update = useStore(s => s.update)
+  const toast = useUI(s => s.toast)
+  useEffect(() => {
+    if (!active) return
+    // Pierwszy trening uruchamia odliczanie tygodnia.
+    if (!S.backup?.started && hasSomethingToSave(S)) {
+      update(s => { s.backup = { ...(s.backup || {}), started: Date.now() } }, false)
+      return
+    }
+    if (!backupDue(S)) return
+    let cancelled = false
+    writeBackup(S).then(res => {
+      if (cancelled) return
+      const failed = res === 'failed'
+      update(s => { s.backup = { ...(s.backup || {}), last: Date.now(), lastFailed: failed } }, false)
+      if (!failed) toast(t('Weekly backup saved'))
+    })
+    return () => { cancelled = true }
+    // Świadomie tylko na wejściu i po zmianie liczby treningów — nie na każdy render stanu.
+  }, [active, S.workouts.length, S.backup?.auto])
+}
+
+const authedFor = (user, isGuest, ready) => !!(ready || user || isGuest) && !!(user || isGuest)
+
 function Shell() {
   const navigate = useNavigate()
   const loc = useLocation()
@@ -49,6 +78,7 @@ function Shell() {
   useEffect(() => { window.scrollTo(0, 0) }, [loc.pathname])
   // bound to the workout, not to the route — checking Stats mid-session keeps the screen on
   useWakeLock(!!S.active && S.keepAwake !== false)
+  useAutoBackup(S, authedFor(user, isGuest, ready))
 
   const authed = user || isGuest
   if (!ready && !authed) return (

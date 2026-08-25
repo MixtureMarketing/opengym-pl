@@ -14,6 +14,12 @@ z interfejsem po polsku.
 - **Przetłumaczony panel administratora** — w oryginale celowo pozostawiony po angielsku.
 - **Uzupełnione brakujące teksty** — komunikaty trybu demo i drobne etykiety, których
   nie miał żaden pakiet językowy.
+- **Trener** — analiza historii liczona w przeglądarce: ostrzega, gdy skok ciężaru jest
+  za duży albo wynik wymagałby rekordu życiowego, wykrywa zastój, skok objętości, brak dnia
+  wolnego i pominięte partie. Działa offline, bez API. Opcjonalnie, w instalacji z serwerem,
+  dochodzi przycisk „Zapytaj trenera" oparty o Claude.
+- **Cotygodniowa kopia zapasowa** — aplikacja sama zapisuje plik JSON z całym stanem raz
+  w tygodniu, a gdy przeglądarka zablokuje pobieranie, prosi o jedno kliknięcie.
 - **`Dockerfile.allinone`** — API i frontend w jednym kontenerze, na jednym porcie.
   Wdrożenie na Render / Railway / Fly.io bez stawiania nginxa.
 - **Workflow GitHuba** — publikacja na GitHub Pages (aplikacja na telefon w 2 minuty)

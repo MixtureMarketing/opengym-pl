@@ -9,6 +9,7 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.120.0",
     "@simplewebauthn/server": "^13.1.1",
     "web-push": "^3.6.7"
   }
