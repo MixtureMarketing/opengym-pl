@@ -43,6 +43,14 @@ jobs:
         env:
           VITE_IMG_BASE: https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@7455efae41b330c265e7cd4b78dfa848e7ce5ebd/images/
           VITE_GIF_BASE: https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/
+          # Hosting statyczny: nie ma serwera Node, więc aplikacja nie pokazuje logowania
+          # kluczem dostępu. Bez tego POST do /api/... kończył się błędem 405 od GitHub Pages.
+          VITE_STATIC: '1'
+          # Ustaw te dwie wartości w Settings → Secrets and variables → Actions,
+          # a aplikacja przełączy się na logowanie mailem i synchronizację przez Supabase.
+          # Klucz `anon` jest jawny z założenia — dostępu pilnuje RLS w bazie.
+          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
         run: npm run build
 
       - name: SPA fallback (404.html = index.html)

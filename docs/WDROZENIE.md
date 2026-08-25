@@ -4,8 +4,9 @@ Trzy scenariusze, od najprostszego. Wybierz jeden — nie wykluczają się, ale 
 
 | Scenariusz | Co dostajesz | Czego nie dostajesz | Koszt |
 |---|---|---|---|
-| **A. GitHub Pages** | aplikacja pod adresem HTTPS, instalowalna na telefonie jako PWA, działa offline | logowania kluczem, synchronizacji między urządzeniami, panelu administratora | 0 zł |
-| **B. Własny serwer (Docker)** | pełny openGym: klucze dostępu, synchronizacja telefon↔laptop, panel admina | — | VPS, ok. 20–30 zł/mies. |
+| **A. GitHub Pages** | aplikacja pod adresem HTTPS, instalowalna na telefonie jako PWA, działa offline | kont, synchronizacji między urządzeniami, trenera AI | 0 zł |
+| **A+. GitHub Pages + Supabase** | to samo co A **plus** konto, synchronizacja telefon↔laptop i trener AI — bez własnego serwera | logowania kluczem dostępu (jest logowanie mailem), panelu administratora | 0 zł |
+| **B. Własny serwer (Docker)** | pełny openGym: klucze dostępu, synchronizacja, panel admina, trener AI | — | VPS, ok. 20–30 zł/mies. |
 | **C. Render.com (jeden kontener)** | to samo co B, bez własnego serwera | darmowy plan usypia usługę po 15 min bezczynności | 0 zł / od ok. 7 USD za plan bez usypiania |
 
 Dane treningowe **nigdy** nie trafiają do repozytorium — w wariancie A siedzą w pamięci przeglądarki
@@ -37,6 +38,90 @@ Jeśli chcesz mieć te same treningi na telefonie i na laptopie — potrzebujesz
 
 Obrazki i animacje ćwiczeń w tym wariancie ładują się z CDN (jsDelivr), żeby nie pakować
 140 MB grafik do repozytorium.
+
+---
+
+## A+. GitHub Pages + Supabase — konto i synchronizacja bez własnego serwera
+
+Aplikacja zostaje tam, gdzie jest (statyczne pliki na GitHub Pages), a rolę serwera przejmuje
+Supabase: Postgres na dane, logowanie linkiem z maila i funkcja brzegowa dla trenera AI.
+Nic twojego nie chodzi 24/7, a treningi widzisz i na telefonie, i na laptopie.
+
+### 1. Projekt
+
+1. [supabase.com](https://supabase.com) → **New project**. Region wybierz europejski
+   (Frankfurt), hasło do bazy zapisz w menedżerze haseł — przyda się tylko awaryjnie.
+2. **Settings → API** — stamtąd bierzesz dwie wartości:
+   - **Project URL**, np. `https://abcdefgh.supabase.co`
+   - **anon public** — długi klucz zaczynający się od `eyJ…`
+
+Klucza **service_role** nie wolno nigdzie wkleić po stronie aplikacji: on omija wszystkie
+reguły dostępu. Używa go wyłącznie funkcja brzegowa, po stronie Supabase.
+
+### 2. Schemat bazy
+
+**SQL Editor → New query**, wklej całą zawartość [`supabase/schema.sql`](../supabase/schema.sql)
+i uruchom. Skrypt tworzy tabelę `states` (jeden wiersz na użytkownika, cały stan w JSONB),
+polityki RLS i licznik pytań do trenera.
+
+Polityki RLS to jedyna rzecz stojąca między czyimiś treningami a resztą internetu. Klucz `anon`
+jest jawny z założenia — jedzie w każdym żądaniu z przeglądarki i nie da się go ukryć.
+Bez ważnego tokenu sesji polityki nie przepuszczą ani odczytu, ani zapisu, a z tokenem widać
+wyłącznie własny wiersz.
+
+### 3. Adresy powrotu dla logowania
+
+**Authentication → URL Configuration**:
+
+- **Site URL**: `https://<twój-login>.github.io/<repo>/`
+- **Redirect URLs**: dodaj ten sam adres oraz `http://localhost:5173/` do pracy lokalnej.
+
+Bez tego wpisu link z maila odbije się od Supabase, a komunikat błędu nie powie ci dlaczego.
+
+### 4. Wpięcie do aplikacji
+
+W repozytorium: **Settings → Secrets and variables → Actions → Variables → New variable**,
+dwa razy:
+
+| Nazwa | Wartość |
+|---|---|
+| `SUPABASE_URL` | Project URL z kroku 1 |
+| `SUPABASE_ANON_KEY` | klucz `anon public` z kroku 1 |
+
+Potem **Actions → „Publikacja na GitHub Pages" → Run workflow**. Po deployu ekran startowy
+pokazuje *Zaloguj się mailem* zamiast trybu bez konta.
+
+### 5. Trener AI (opcjonalnie)
+
+Wymaga [Supabase CLI](https://supabase.com/docs/guides/cli):
+
+```bash
+supabase login
+supabase link --project-ref <ref-projektu>        # ref to człon z adresu: abcdefgh
+supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+supabase functions deploy coach
+```
+
+Klucz do Anthropic jest sekretem projektu i nigdy nie trafia do przeglądarki. Bez wdrożonej
+funkcji przycisk „Zapytaj trenera" zwraca komunikat, że ta instalacja nie ma trenera —
+reszta aplikacji działa normalnie.
+
+### Czego ten wariant nie ma
+
+- **Logowania kluczem dostępu** — Supabase Auth nie oferuje passkey jako metody logowania,
+  więc jest link w mailu. Klucze dostępu zostają w wariancie B i C.
+- **Panelu administratora** — jest częścią serwera Node.
+- Darmowy plan Supabase **usypia projekt po tygodniu bez ruchu** (odblokowujesz jednym
+  kliknięciem w panelu). Przy treningach kilka razy w tygodniu to się nie zdarza.
+
+### Praca lokalna z Supabase
+
+```bash
+cd frontend
+VITE_SUPABASE_URL=https://abcdefgh.supabase.co \
+VITE_SUPABASE_ANON_KEY=eyJ... \
+npm run dev
+```
 
 ---
 
@@ -257,6 +342,15 @@ Passkey działa tylko po HTTPS albo na `http://localhost`.
 **„Brak obrazków ćwiczeń"** — w wariancie B pobierz je ponownie:
 `docker compose run --rm media`. W wariantach A i C idą z CDN — sprawdź, czy coś nie blokuje
 `cdn.jsdelivr.net`.
+
+**„Błąd 405 po kliknięciu logowania"** — tak odpowiada serwer plików statycznych (GitHub Pages)
+na żądanie POST. Znaczy to, że aplikacja została zbudowana tak, jakby stał za nią serwer Node.
+Build dla Pages musi mieć `VITE_STATIC=1` (workflow ustawia to sam) — wtedy ekran startowy
+w ogóle nie proponuje logowania kluczem, bo nie ma czego pytać. Jeśli chcesz mieć konto na
+Pages, to jest dokładnie ten moment na wariant A+ z Supabase.
+
+**„Link z maila nie loguje"** — adres aplikacji musi być dopisany w Supabase w
+*Authentication → URL Configuration → Redirect URLs*, co do znaku, razem z ukośnikiem na końcu.
 
 **„Pages pokazuje 404"** — Settings → Pages → Source musi być ustawione na **GitHub Actions**,
 nie na gałąź.

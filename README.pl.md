@@ -22,6 +22,12 @@ z interfejsem po polsku.
   w tygodniu, a gdy przeglądarka zablokuje pobieranie, prosi o jedno kliknięcie.
 - **`Dockerfile.allinone`** — API i frontend w jednym kontenerze, na jednym porcie.
   Wdrożenie na Render / Railway / Fly.io bez stawiania nginxa.
+- **Supabase jako baza** — logowanie linkiem z maila, dane w Postgresie z RLS, trener AI
+  w funkcji brzegowej. Efekt: konto i synchronizacja telefon↔laptop bez stawiania serwera.
+  Włącza się dwiema zmiennymi w ustawieniach repozytorium.
+- **Tryby uruchomienia** — aplikacja wie, co za nią stoi (własny serwer, Supabase albo nic)
+  i pokazuje tylko to logowanie, które w danej konfiguracji naprawdę działa. Wcześniej
+  na hostingu statycznym kończyło się to błędem 405.
 - **Workflow GitHuba** — publikacja na GitHub Pages (aplikacja na telefon w 2 minuty)
   i budowanie obrazów Dockera do GHCR.
 - **`.env.example`** — z opisem każdej zmiennej po polsku (w oryginale plik nie istniał).

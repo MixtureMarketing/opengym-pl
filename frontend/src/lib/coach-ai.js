@@ -9,6 +9,8 @@
 // więc wszystko tutaj musi umieć zwrócić „nie ma trenera" zamiast się wywalić.
 
 import { api } from './api.js'
+import { usesSupabase } from './backend.js'
+import { askCoachEdge } from './supabase.js'
 import { coachReport } from './coach.js'
 import { weeklyVolume } from './coach.js'
 import { best1RM } from './onerm.js'
@@ -78,5 +80,8 @@ export async function askCoach(S, question) {
     // Ustalenia lokalnego trenera jako angielskie źródła — model widzi to samo, co użytkownik.
     findings: coachReport(S).map(c => ({ level: c.level, title: c.title, detail: c.detail, args: c.args }))
   }
+  // Ta sama treść trafia albo do własnego serwera, albo do funkcji brzegowej Supabase —
+  // w obu przypadkach klucz do Anthropic zostaje po drugiej stronie.
+  if (usesSupabase) return askCoachEdge(body)
   return api('/api/coach', { method: 'POST', body: JSON.stringify(body) })
 }

@@ -4,6 +4,8 @@ import { webauthnOK, passkeyLogin, passkeyRegister, api, BIO } from '../lib/api.
 import { hasData } from '../store/useStore.js'
 import { t } from '../lib/i18n.js'
 import { DEMO, REPO } from '../lib/demo.js'
+import { MODE, usesSupabase, hasAccounts } from '../lib/backend.js'
+import { sendMagicLink } from '../lib/supabase.js'
 import { useState, useRef, useEffect } from 'react'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
@@ -42,6 +44,45 @@ function RegisterSheet({ close }) {
   </>
 }
 
+// Logowanie linkiem z maila (wariant z Supabase). Świadomie bez hasła: hasło do aplikacji,
+// z której korzystasz trzy razy w tygodniu, i tak wyląduje w menedżerze haseł albo na kartce.
+function MagicLinkSheet({ close }) {
+  const [email, setEmail] = useState('')
+  const [sent, setSent] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => { setTimeout(() => ref.current?.focus(), 250) }, [])
+
+  const go = async () => {
+    const v = email.trim()
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { useUI.getState().toast(t('Enter a valid email address')); return }
+    setBusy(true)
+    try { await sendMagicLink(v); setSent(true) }
+    catch (e) { useUI.getState().toast(e.message || t('Could not send the link')) }
+    setBusy(false)
+  }
+
+  if (sent) return <>
+    <h3>{t('Check your inbox')}</h3>
+    <div className="muted small" style={{ marginBottom: 14 }}>
+      {t('A sign-in link is on its way to {0}. Open it on this device — the link signs in whichever device opens it.', email.trim())}
+    </div>
+    <Button variant="primary" onClick={close}>{t('Done')}</Button>
+  </>
+
+  return <>
+    <h3>{t('Sign in with email')}</h3>
+    <div className="muted small" style={{ marginBottom: 14 }}>
+      {t('No password. You get a link, you tap it, you are in — on every device you open it on.')}
+    </div>
+    <input ref={ref} className="input" type="email" inputMode="email" autoComplete="email"
+      placeholder="adres@example.com" value={email} onChange={e => setEmail(e.target.value)}
+      onKeyDown={e => { if (e.key === 'Enter') go() }} />
+    <div style={{ height: 12 }} />
+    <Button variant="primary" disabled={busy} onClick={go}>{busy ? t('Sending…') : t('Send the link')}</Button>
+  </>
+}
+
 export default function Login() {
   const { setUser, pullState, setGuest } = useStore()
   const signIn = async () => {
@@ -65,6 +106,38 @@ export default function Login() {
       </div>
       <div className="dim small" style={{ marginTop: 22, lineHeight: 1.6 }}>
         <a href={REPO} target="_blank" rel="noopener">{t('Self-host it in a minute →')}</a>
+      </div>
+    </div>
+  )
+
+  // Hosting statyczny bez bazy: nie ma serwera, do którego można się zalogować. Pokazywanie
+  // przycisku logowania kończyło się błędem 405 z serwera plików — więc go tu nie ma.
+  if (!hasAccounts) return (
+    <div className="narrow" style={wrap}>
+      {head}
+      <div className="muted" style={{ marginBottom: 30 }}>{t('Everything stays on this device.')}</div>
+      <Button variant="primary" icon="dumbbell" onClick={() => setGuest(true)}>{t('Start training')}</Button>
+      <div className="card small muted" style={{ textAlign: 'left', marginTop: 16 }}>
+        {t('This build has no account behind it — your plan and workouts live in this browser only. Sync across devices needs a database (Supabase) or your own server.')}
+      </div>
+      <div className="dim small" style={{ marginTop: 22, lineHeight: 1.6 }}>
+        <a href={REPO} target="_blank" rel="noopener">{t('How to add sync →')}</a>
+      </div>
+    </div>
+  )
+
+  // Wariant z Supabase: konto jest, ale nie ma serwera z kluczami dostępu — logowanie mailem.
+  if (usesSupabase) return (
+    <div className="narrow" style={wrap}>
+      {head}
+      <div className="muted" style={{ marginBottom: 34 }}>{t('Your workouts, on every device you sign in on.')}</div>
+      <Button variant="primary" icon="person" onClick={() => useUI.getState().openSheet(close => <MagicLinkSheet close={close} />)}>
+        {t('Sign in with email')}
+      </Button>
+      <div style={{ height: 10 }} />
+      <Button variant="ghost" className="dim" onClick={() => setGuest(true)}>{t('Continue without account')}</Button>
+      <div className="dim small" style={{ marginTop: 26, lineHeight: 1.5 }}>
+        {t('No password — a link in your inbox signs you in.')}<br />{t('Each profile keeps its own plan, workouts & body weight.')}
       </div>
     </div>
   )

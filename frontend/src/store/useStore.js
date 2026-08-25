@@ -4,6 +4,8 @@ import { localTZ } from '../lib/format.js'
 import { registerCustom } from '../lib/exercises.js'
 import { DEMO, DEMO_SEEDED } from '../lib/demo.js'
 import { MOBILE, nativeLoad, nativeSave, syncReminder } from '../lib/mobile.js'
+import { usesSupabase, hasAccounts } from '../lib/backend.js'
+import { currentUser, consumeAuthRedirect, pullSupabaseState, pushSupabaseState, signOutSupabase } from '../lib/supabase.js'
 
 const KEY = 'gym_state_v1'
 
@@ -122,12 +124,15 @@ export const useStore = create((set, get) => {
     async pushState() {
       if (!get().user) return
       clearTimeout(pushTm)
-      try { await api('/api/data', { method: 'PUT', body: JSON.stringify({ state: get().S }) }); localStorage.removeItem('gym_dirty') }
-      catch (e) { localStorage.setItem('gym_dirty', '1') }
+      try {
+        if (usesSupabase) await pushSupabaseState(get().S)
+        else await api('/api/data', { method: 'PUT', body: JSON.stringify({ state: get().S }) })
+        localStorage.removeItem('gym_dirty')
+      } catch (e) { localStorage.setItem('gym_dirty', '1') }
     },
     async pullState() {
       try {
-        const { state } = await api('/api/data')
+        const state = usesSupabase ? await pullSupabaseState() : (await api('/api/data')).state
         const S = get().S
         const dirty = localStorage.getItem('gym_dirty') === '1'
         if (state && (!hasData(S) || ((state._ts || 0) >= (S._ts || 0) && !dirty))) {
@@ -140,7 +145,11 @@ export const useStore = create((set, get) => {
     },
 
     async signOut() {
-      try { await get().pushState(); await api('/api/logout', { method: 'POST', body: '{}' }) } catch (e) { /* */ }
+      try {
+        await get().pushState()
+        if (usesSupabase) await signOutSupabase()
+        else await api('/api/logout', { method: 'POST', body: '{}' })
+      } catch (e) { /* wylogowanie nie może się nie udać — lokalną sesję i tak czyścimy */ }
       clearLocalSession()
     },
 
@@ -190,7 +199,24 @@ export const useStore = create((set, get) => {
         set({ ready: true })
         return
       }
+      // Hosting statyczny bez Supabase: nie ma czego pytać, a POST do /api na serwerze
+      // plików kończy się błędem 405. Jedyna droga to profil lokalny.
+      if (!hasAccounts) { get().setGuest(true); set({ ready: true }); return }
+
       try {
+        if (usesSupabase) {
+          // Powrót z linku w mailu trzeba obsłużyć zanim cokolwiek zapyta o sesję.
+          await consumeAuthRedirect().catch(() => {})
+          const u = await currentUser()
+          if (!u) { set({ ready: true }); return }
+          get().setUser(u)
+          // Trener AI to funkcja brzegowa — jej brak wychodzi dopiero przy pierwszym
+          // pytaniu (404), więc przycisk pokazujemy i obsługujemy odmowę.
+          set({ aiCoach: true })
+          await get().pullState()
+          set({ ready: true })
+          return
+        }
         const me = await api('/api/me')
         get().setUser(me.user)
         // Trener AI istnieje tylko wtedy, gdy serwer ma klucz — front nie zgaduje,

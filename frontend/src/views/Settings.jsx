@@ -10,9 +10,41 @@ import { wakeLockSupported } from '../lib/wakelock.js'
 import { t, LANGS, INSTR_LANGS } from '../lib/i18n.js'
 import { DEMO, REPO } from '../lib/demo.js'
 import { MOBILE, shareExport, syncReminder } from '../lib/mobile.js'
+import { usesSupabase, hasAccounts } from '../lib/backend.js'
+import { sendMagicLink } from '../lib/supabase.js'
 import { loadStarterPlan, confirmSheet, importFromApp } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Section, Row, SelectRow, Switch, Segmented, Button, TextField } from '../components/ui.jsx'
+
+// Ten sam przepływ co na ekranie logowania, dostępny też z Ustawień: gość, który zdążył
+// coś zapisać, może założyć konto bez utraty tego, co ma na urządzeniu.
+function EmailSignInSheet({ close }) {
+  const [email, setEmail] = useState('')
+  const [sent, setSent] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const toast = useUI(s => s.toast)
+  const go = async () => {
+    const v = email.trim()
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { toast(t('Enter a valid email address')); return }
+    setBusy(true)
+    try { await sendMagicLink(v); setSent(true) }
+    catch (e) { toast(e.message || t('Could not send the link')) }
+    setBusy(false)
+  }
+  if (sent) return <>
+    <h3>{t('Check your inbox')}</h3>
+    <div className="muted small" style={{ marginBottom: 14 }}>{t('A sign-in link is on its way to {0}. Open it on this device — the link signs in whichever device opens it.', email.trim())}</div>
+    <Button variant="primary" onClick={close}>{t('Done')}</Button>
+  </>
+  return <>
+    <h3>{t('Sign in with email')}</h3>
+    <div className="muted small" style={{ marginBottom: 14 }}>{t('Your data on this device moves into the profile you sign in to.')}</div>
+    <input className="input" type="email" inputMode="email" autoComplete="email" placeholder="adres@example.com"
+      value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') go() }} />
+    <div style={{ height: 12 }} />
+    <Button variant="primary" disabled={busy} onClick={go}>{busy ? t('Sending…') : t('Send the link')}</Button>
+  </>
+}
 
 export default function Settings() {
   const nav = useNavigate()
@@ -88,10 +120,22 @@ export default function Settings() {
         <Row icon="rocket" iconTint="var(--indigo)" title={t('Self-host openGym')} subtitle={t('Passkey sign-in, sync across your devices, your own data.')} accessory="chevron"
           onClick={() => window.open(REPO, '_blank', 'noopener')} />
       </> : user ? <>
-        <Row icon="personCircle" iconTint="var(--grey)" title={user.name} subtitle={t('Signed in with passkey — data syncs to this profile.')} />
+        <Row icon="personCircle" iconTint="var(--grey)" title={user.name}
+          subtitle={usesSupabase
+            ? t('Signed in as {0} — data syncs to this profile.', user.email || user.name)
+            : t('Signed in with passkey — data syncs to this profile.')} />
         {user.admin && <Row icon="wrench" iconTint="var(--indigo)" title={t('Admin dashboard')} accessory="chevron" onClick={() => nav('/admin')} />}
         <Row icon="signOut" iconTint="var(--red)" title={t('Sign out')} danger onClick={() => confirmSheet({ title: t('Sign out?'), message: t('Your data is synced to your profile first, then cleared from this device.'), confirmText: t('Sign out'), danger: true, onConfirm: () => { signOut(); nav('/home') } })} />
-        <Row icon="shield" iconTint="var(--red)" title={t('Sign out everywhere')} subtitle={t('Ends this profile’s sessions on all your devices.')} danger onClick={signOutEverywhere} />
+        {/* „Wyloguj wszędzie" unieważnia sesje po stronie serwera Node; Supabase robi to
+            własnym przepływem, więc tam ten wiersz byłby przyciskiem donikąd. */}
+        {!usesSupabase && <Row icon="shield" iconTint="var(--red)" title={t('Sign out everywhere')} subtitle={t('Ends this profile’s sessions on all your devices.')} danger onClick={signOutEverywhere} />}
+      </> : !hasAccounts ? <>
+        <Row icon="lock" iconTint="var(--acc)" title={t('All data stays in this browser')}
+          subtitle={t('This build has no account behind it — export a backup now and then.')} />
+      </> : usesSupabase ? <>
+        <Row icon="person" iconTint="var(--blue)" title={t('Sign in with email')}
+          subtitle={t('No password — a link in your inbox signs you in.')} accessory="chevron"
+          onClick={() => useUI.getState().openSheet(close => <EmailSignInSheet close={close} />)} />
       </> : webauthnOK() ? <>
         <Row icon="sparkles" iconTint="var(--acc)" title={t('Create passkey profile')} subtitle={t('Keeps your data safe and separate per person.')} accessory="chevron" onClick={registerHere} />
         <Row icon="person" iconTint="var(--blue)" title={t('Sign in with passkey')} accessory="chevron" onClick={signInHere} />
